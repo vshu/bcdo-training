@@ -126,7 +126,7 @@ main()
 		case "$flag" in
 		a)
 			AFLAG=true
-			ACTDIR=${!OPTIND}
+			ACTDIR="$OPTARG"
 			;;
 		d)
 			DFLAG=true
@@ -139,11 +139,11 @@ main()
 			VFLAG=true
 			;;
 		o)
-			XMLFILE=${!OPTIND}
+			XMLFILE="$OPTARG"
 			OFLAG=true
 			;;
 		p)
-			PLATFORM=${!OPTIND}
+			PLATFORM="$OPTARG"
 			;;
 		*)
 			prog_error "unknown flag -$flag"
