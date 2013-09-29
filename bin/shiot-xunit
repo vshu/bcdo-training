@@ -1,0 +1,161 @@
+#! /bin/bash
+#	shiot-xunit [-hv] [-p PLATFORM] DIRs
+#		-o XMLFILE    put xml results in XMLFILE
+#		-p PLATFORM   run tests for given PLATFORM
+#		-h            print help message
+#		-v            verbose
+# run shiot tests under all the given DIRs,
+# and report results in xunit xml format.
+# for reporting purposes, each DIR is considered a "test suite".
+# all -test files under it are considered "test cases"
+#
+
+testcases()
+{
+	declare d="$1"
+	if [ -n "$PLATFORM" ]; then
+		find $d -type f -name "*-tests" -o -name "*-tests-$PLATFORM"
+	else
+		find $d -type f -name "*-tests"
+	fi
+}
+
+runtest()
+{
+	declare tf="$1" tmpf="$2" outf="$3"
+	declare xstat
+
+	$VFLAG && echo "+ shiot -C $t"
+
+	((SECONDS=0))
+	$SHIOT -C "$t" > "$tmpf" 2>&1
+	xstat=$?
+	cat "$tmpf"
+
+	if $XFLAG; then
+		{
+		printf '<testcase classname="%s" name="%s" time="%d">\n' \
+			"shiot" "$t" "$SECONDS"
+		if [ $xstat -ne 0 ]; then
+			printf '</failure>\n'
+			cat "$outf"
+			printf '</failure>\n'
+		fi
+		printf '</testcase>\n'
+		} >> $outf
+	fi
+
+	return $xstat
+}
+
+runsuite()
+{
+	declare name="$1"
+	declare cases=$(testcases "$name" | sort)
+	declare tests=0 errors=0 failures=0
+	declare outf tmpf
+	declare xstat
+
+	if [ -z "$cases" ]; then
+		return
+	fi
+
+	$VFLAG && echo "===== running shiot for $name"
+	mkdir -p $LOGDIR
+
+	for t in $cases; do
+		outf="$LOGDIR/$tests.out"
+		tmpf="$LOGDIR/$tests.tmp"
+		if ! runtest "$t" "$tmpf" "$outf"; then
+			FAILED=1
+			((failures++))
+		fi
+		((tests++))
+	done
+
+	if $XFLAG; then
+	{
+	printf '<testsuite name="%s" tests="%d" errors="%d" failures="%d">\n' \
+		"$name" "$tests" "$errors" "$failures"
+	((i=0))
+	for t in $cases; do
+		cat "$LOGDIR/$i.out"
+		((i++))
+	done
+	printf '</testsuite>\n'
+	} >> $XMLFILE
+	fi
+
+	/bin/rm -rf $LOGDIR
+	$VFLAG && echo "====="
+}
+
+usage()
+{
+	echo 'usage: shiot-xunit [-hv] [-p PLATFORM] DIRs'
+	echo '	-h           print help message'
+	echo '	-v           verbose'
+	echo '	-p PLATFORM  run tests for PLATFORM'
+	echo '	DIRs         directories containing shiot tests'
+}
+
+prog_error()
+{
+	echo "$PROGNAME: $*" 1>&2
+}
+
+main()
+{
+	while getopts ':hvp:o:' flag; do
+		case "$flag" in
+		h)
+			usage
+			exit 0
+			;;
+		v)
+			VFLAG=true
+			;;
+		o)
+			XMLFILE=${!OPTIND}
+			XFLAG=true
+			;;
+		p)
+			PLATFORM=${!OPTIND}
+			;;
+		*)
+			prog_error "unknown flag -$flag"
+			exit 1
+			;;
+		esac
+	done
+	shift $((OPTIND-1))
+
+	PLATFORM="$1"; shift
+
+	echo '<?xml version="1.0" encoding="UTF-8"?>'
+
+	for d in "$@"; do
+		runsuite $d
+	done
+}
+
+cleanup()
+{
+	/bin/rm -rf $LOGDIR
+}
+
+# ----- start of mainline code
+FAILED=0
+PROGNAME=${0##*/}
+PROGDIR=$(cd $(dirname $0) && /bin/pwd -P)
+PLATFORM=
+XMLFILE=
+XFLAG=false
+VFLAG=false
+SHIOT=${SHIOT:-$PROGDIR/shiot}
+LOGDIR=/tmp/shiot-xunit-$$
+trap cleanup exit
+
+main "$@"
+
+exit $FAILED
