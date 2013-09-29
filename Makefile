@@ -1,5 +1,6 @@
 # makefile for running tests
 # can be called from jenkins
+# todo: may need to set PATH appropriately
 
 default: tests
 
@@ -45,5 +46,6 @@ shunit2-tests:
 	@echo '($@ not working yet)' && exit 1
 
 shiot-tests: $(TEST_REP_DIR)
-	$(BIN)/shiot-xunit -v $(ACT_DIRS) -o $(TEST_REP_DIR)/shiot.xml
+	cd $(ACT_BASE) \
+	&& $(BIN)/shiot-xunit -v -o $(TEST_REP_DIR)/shiot.xml
 

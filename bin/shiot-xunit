@@ -1,8 +1,10 @@
 #! /bin/bash
-#	shiot-xunit [-hv] [-p PLATFORM] DIRs
+#	shiot-xunit [-OPTIONS] [DIRs]
+#		-a ACTDIR     run all suites that are children of ACTDIR
+#		-d            debug
+#		-h            print help message
 #		-o XMLFILE    put xml results in XMLFILE
 #		-p PLATFORM   run tests for given PLATFORM
-#		-h            print help message
 #		-v            verbose
 # run shiot tests under all the given DIRs,
 # and report results in xunit xml format.
@@ -25,14 +27,14 @@ runtest()
 	declare tf="$1" tmpf="$2" outf="$3"
 	declare xstat
 
-	$VFLAG && echo "+ shiot -C $t"
+	$DFLAG && echo "+ shiot -C $t"
 
 	((SECONDS=0))
 	$SHIOT -C "$t" > "$tmpf" 2>&1
 	xstat=$?
 	cat "$tmpf"
 
-	if $XFLAG; then
+	if $OFLAG; then
 		{
 		printf '<testcase classname="%s" name="%s" time="%d">\n' \
 			"shiot" "$t" "$SECONDS"
@@ -57,10 +59,14 @@ runsuite()
 	declare xstat
 
 	if [ -z "$cases" ]; then
-		return
+		# a directory with no tests will be skipped, not counted
+		$DFLAG && echo "===== no shiot tests found under $name, skipping"
+		return 0
 	fi
 
-	$VFLAG && echo "===== running shiot for $name"
+	((NSUITES++))
+
+	$VFLAG && echo "===== running suite $name"
 	mkdir -p $LOGDIR
 
 	for t in $cases; do
@@ -73,7 +79,7 @@ runsuite()
 		((tests++))
 	done
 
-	if $XFLAG; then
+	if $OFLAG; then
 	{
 	printf '<testsuite name="%s" tests="%d" errors="%d" failures="%d">\n' \
 		"$name" "$tests" "$errors" "$failures"
@@ -87,16 +93,26 @@ runsuite()
 	fi
 
 	/bin/rm -rf $LOGDIR
-	$VFLAG && echo "====="
+
+	[ $failures -eq 0 ]
 }
 
 usage()
 {
-	echo 'usage: shiot-xunit [-hv] [-p PLATFORM] DIRs'
+	echo 'usage: shiot-xunit [-OPTIONS] [DIRs]'
+	echo '	-a ACTDIR    run all suites children of ACTDIR'
+	echo '	-d           debug'
 	echo '	-h           print help message'
-	echo '	-v           verbose'
+	echo '	-o XMLFILE   output xml to XMLFILE'
 	echo '	-p PLATFORM  run tests for PLATFORM'
+	echo '	-v           verbose'
 	echo '	DIRs         directories containing shiot tests'
+}
+
+get_suites()
+{
+	declare d="$1"
+	find "$d"/* -maxdepth 0 -type d | sed -e 's,^\./,,'
 }
 
 prog_error()
@@ -106,8 +122,15 @@ prog_error()
 
 main()
 {
-	while getopts ':hvp:o:' flag; do
+	while getopts ':a:dho:p:v' flag; do
 		case "$flag" in
+		a)
+			AFLAG=true
+			ACTDIR=${!OPTIND}
+			;;
+		d)
+			DFLAG=true
+			;;
 		h)
 			usage
 			exit 0
@@ -117,7 +140,7 @@ main()
 			;;
 		o)
 			XMLFILE=${!OPTIND}
-			XFLAG=true
+			OFLAG=true
 			;;
 		p)
 			PLATFORM=${!OPTIND}
@@ -129,13 +152,22 @@ main()
 		esac
 	done
 	shift $((OPTIND-1))
+	if [ $# -eq 0 ]; then
+		AFLAG=true
+		ACTDIR=.
+	fi
+	if $AFLAG; then
+		set -- $(get_suites $ACTDIR) "$@"
+	fi
 
-	PLATFORM="$1"; shift
-
-	echo '<?xml version="1.0" encoding="UTF-8"?>'
+	if $OFLAG; then
+		{
+		echo '<?xml version="1.0" encoding="UTF-8"?>'
+		} >> $XMLFILE
+	fi
 
 	for d in "$@"; do
-		runsuite $d
+		runsuite $d || ((SUITES_FAILED++))
 	done
 }
 
@@ -150,12 +182,19 @@ PROGNAME=${0##*/}
 PROGDIR=$(cd $(dirname $0) && /bin/pwd -P)
 PLATFORM=
 XMLFILE=
-XFLAG=false
+OFLAG=false
+AFLAG=false
+ACTDIR=
+DFLAG=false
 VFLAG=false
 SHIOT=${SHIOT:-$PROGDIR/shiot}
 LOGDIR=/tmp/shiot-xunit-$$
+NSUITES=0
+SUITES_FAILED=0
 trap cleanup exit
 
 main "$@"
 
-exit $FAILED
+printf "===== Ran $NSUITES suites, $SUITES_FAILED failed\n"
+
+[ $SUITES_FAILED -eq 0 ]
