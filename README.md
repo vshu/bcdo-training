@@ -11,8 +11,9 @@ Students are expected to:
     * add the subdir, commit, and push it to github.
     * set up their jenkins instance to run tests on checkin.
 
-* Shell script tests are to be done with shunit2 (`gen_test_results.sh`) and/or shiot (`shiot-xunit`).
-<http://code.google.com/p/shunit2/>
+* Shell script tests are to be done with shunit2 (`gen_test_results.sh`)
+<http://code.google.com/p/shunit2/> ,
+and/or shiot (`shiot-xunit`).
 For your convenience, shunit2 and shiot are included
 in this repo's bin directory.
 shunit2 is free software from google covered by the GNU Lesser GPL.
