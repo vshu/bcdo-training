@@ -1,0 +1,6 @@
+#! /bin/bash
+
+while read -r line; do
+	declare -a words=($line)
+	echo ${#words[*]}
+done

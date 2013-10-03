@@ -1,0 +1,7 @@
+#! /bin/bash
+#	argsel N WORDS ...
+# print the N'th word among the list of WORDS.
+
+N=$1; shift
+
+echo ${!N}

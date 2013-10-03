@@ -1,12 +1,11 @@
 #! /bin/bash
-#	shiot-xunit [-OPTIONS] [DIRs]
+#	shunit2-xunit [-OPTIONS] [DIRs]
 #		-a ACTDIR     run all suites that are children of ACTDIR
 #		-d            debug
 #		-h            print help message
 #		-o XMLFILE    put xml results in XMLFILE
-#		-p PLATFORM   run tests for given PLATFORM
 #		-v            verbose
-# run shiot tests under all the given DIRs,
+# run shunit2 tests under all the given DIRs,
 # and report results in xunit xml format.
 # for reporting purposes, each DIR is considered a "test suite".
 # all -test files under it are considered "test cases"
@@ -15,11 +14,7 @@
 testcases()
 {
 	declare d="$1"
-	if [ -n "$PLATFORM" ]; then
-		find $d -type f -name "*-tests" -o -name "*-tests-$PLATFORM"
-	else
-		find $d -type f -name "*-tests"
-	fi
+	find $d -type f -name "*_test.sh" -o -name "shunit2_test_*.sh"
 }
 
 runtest()
@@ -27,17 +22,19 @@ runtest()
 	declare tf="$1" tmpf="$2" outf="$3"
 	declare xstat
 
-	$DFLAG && echo "+ shiot -C $t"
+	$DFLAG && echo "+ $t"
 
 	((SECONDS=0))
-	$SHIOT -C "$t" > "$tmpf" 2>&1
+	d=$(dirname $t)
+	t=$(basename $t)
+	(cd $d && ./$t) > "$tmpf" 2>&1
 	xstat=$?
 	cat "$tmpf"
 
 	if $OFLAG; then
 		{
 		printf '<testcase classname="%s" name="%s" time="%d">\n' \
-			"shiot" "$t" "$SECONDS"
+			"shunit2" "$t" "$SECONDS"
 		if [ $xstat -ne 0 ]; then
 			printf '</failure>\n'
 			cat "$outf"
@@ -60,7 +57,7 @@ runsuite()
 
 	if [ -z "$cases" ]; then
 		# a directory with no tests will be skipped, not counted
-		$DFLAG && echo "===== no shiot tests found under $name, skipping"
+		$DFLAG && echo "===== no shunit2 tests found under $name, skipping"
 		return 0
 	fi
 
@@ -99,20 +96,19 @@ runsuite()
 
 usage()
 {
-	echo 'usage: shiot-xunit [-OPTIONS] [DIRs]'
+	echo 'usage: shunit2-xunit [-OPTIONS] [DIRs]'
 	echo '	-a ACTDIR    run all suites children of ACTDIR'
 	echo '	-d           debug'
 	echo '	-h           print help message'
 	echo '	-o XMLFILE   output xml to XMLFILE'
-	echo '	-p PLATFORM  run tests for PLATFORM'
 	echo '	-v           verbose'
-	echo '	DIRs         directories containing shiot tests'
+	echo '	DIRs         directories containing shunit2 tests'
 }
 
 get_suites()
 {
 	declare d="$1"
-	find "$d"/* -maxdepth 0 -type d 2>/dev/null | sed -e 's,^\./,,'
+	find "$d"/* -maxdepth 0 -type d | sed -e 's,^\./,,'
 }
 
 prog_error()
@@ -125,7 +121,8 @@ main()
 	while getopts ':a:dho:p:v' flag; do
 		case "$flag" in
 		a)
-			ACTDIRS+=($(get_suites "$OPTARG"))
+			AFLAG=true
+			ACTDIR="$OPTARG"
 			;;
 		d)
 			DFLAG=true
@@ -141,9 +138,6 @@ main()
 			XMLFILE="$OPTARG"
 			OFLAG=true
 			;;
-		p)
-			PLATFORM="$OPTARG"
-			;;
 		*)
 			prog_error "unknown flag -$flag"
 			exit 1
@@ -152,9 +146,12 @@ main()
 	done
 	shift $((OPTIND-1))
 	if [ $# -eq 0 ]; then
-		ACTDIRS+=($(get_suites .))
+		AFLAG=true
+		ACTDIR=.
 	fi
-	ACTDIRS+=("$@")
+	if $AFLAG; then
+		set -- $(get_suites $ACTDIR) "$@"
+	fi
 
 	if $OFLAG; then
 		{
@@ -162,7 +159,7 @@ main()
 		} >> $XMLFILE
 	fi
 
-	for d in "${ACTDIRS[@]}"; do
+	for d in "$@"; do
 		runsuite $d || ((SUITES_FAILED++))
 	done
 }
@@ -176,14 +173,13 @@ cleanup()
 FAILED=0
 PROGNAME=${0##*/}
 PROGDIR=$(cd $(dirname $0) && /bin/pwd -P)
-PLATFORM=
 XMLFILE=
 OFLAG=false
-declare -a ACTDIRS
+AFLAG=false
+ACTDIR=
 DFLAG=false
 VFLAG=false
-SHIOT=${SHIOT:-$PROGDIR/shiot}
-LOGDIR=/tmp/shiot-xunit-$$
+LOGDIR=/tmp/shunit2-xunit-$$
 NSUITES=0
 SUITES_FAILED=0
 trap cleanup exit

@@ -4,18 +4,29 @@
 
 default: tests
 
-.PHONY: tests shell-tests python-tests ruby-tests
-.PHONY: unittests shell-unittests shiot-tests python-unittests ruby-unittests
+TOP_TARGETS :=ruby-tests shell-tests python-tests
+BUILDROOT :=$(shell /bin/pwd -P)
+ACT_BASE ?=$(BUILDROOT)/acts
+ACT_DIRS :=$(shell ls -d $(ACT_BASE)/*)
+TEST_REP_DIR :=$(BUILDROOT)/test-reports
+BIN :=$(BUILDROOT)/bin
+RESULTS_DIR :=$(BUILDROOT)/test-results
+HDR:= =====
 
-tests:
-	@$(MAKE) -k shell-tests shiot-tests python-tests ruby-tests
+.PHONY: clean
+.PHONY: tests ruby-tests shell-tests python-tests
+.PHONY: unittests ruby-unittests shell-unittests shiot-tests python-unittests
+
+tests: clean $(TEST_REP_DIR)
+	@$(MAKE) selftest > $(TEST_REP_DIR)/selftest.out 2>&1
+	@$(MAKE) -k $(TOP_TARGETS)
 
 # make -k doesn't exit on first error
 unittests:
-	@$(MAKE) -k shell-unittests python-unittests ruby-unittests
+	@$(MAKE) -k ruby-unittests shell-unittests python-unittests
 
 shell-tests:
-	@$(MAKE) -k shiot-tests shunit2-tests
+	@$(MAKE) shiot-tests shunit2-tests
 
 python-tests:
 	@$(MAKE) -k python-unittests
@@ -23,29 +34,40 @@ python-tests:
 ruby-tests:
 	@$(MAKE) -k ruby-unittests
 
-BUILDROOT:=$(shell /bin/pwd -P)
-ACT_BASE:=$(BUILDROOT)/acts
-ACT_DIRS := $(shell ls -d $(ACT_BASE)/*)
-TEST_REP_DIR=$(BUILDROOT)/test-reports
-BIN=$(BUILDROOT)/bin
+clean:
+	/bin/rm -rf $(TEST_REP_DIR)
+
+selftest: clean $(TEST_REP_DIR)
+	@$(MAKE) ST_SUF=_st ACT_BASE=$(BUILDROOT)/testacts $(TOP_TARGETS)
+
+$(RESULTS_DIR):
+	mkdir -p $@
 
 $(TEST_REP_DIR):
 	mkdir -p $@
 
 python-unittests: $(TEST_REP_DIR)
+	@echo $(HDR) running $@
 	cd $(ACT_BASE) \
 	&& nosetests --with-xunit \
-	--xunit-file=$(TEST_REP_DIR)/nosetests.xml
+	--xunit-file=$(TEST_REP_DIR)/nosetests$(ST_SUF).xml
+	@echo $(HDR)
 
 ruby-unittests: $(TEST_REP_DIR)
+	@echo $(HDR) running $@
 	cd $(ACT_BASE) \
-	&& rspec -r rspec_junit_formatter --format RspecJunitFormatter \
-	-o $(TEST_REP_DIR)/rspec.xml \
+	&& $(BIN)/rspec-xunit -v -o $(TEST_REP_DIR)/rspec$(ST_SUF).xml
+	@echo $(HDR)
 
 shunit2-tests:
-	@echo '($@ not working yet)' && exit 1
+	@echo $(HDR) running $@
+	cd $(ACT_BASE) \
+	&& $(BIN)/shunit2-xunit -v -o $(TEST_REP_DIR)/shunit2$(ST_SUF).xml
+	@echo $(HDR)
 
 shiot-tests: $(TEST_REP_DIR)
+	@echo $(HDR) running $@
 	cd $(ACT_BASE) \
-	&& $(BIN)/shiot-xunit -v -o $(TEST_REP_DIR)/shiot.xml
+	&& $(BIN)/shiot-xunit -v -o $(TEST_REP_DIR)/shiot$(ST_SUF).xml
+	@echo $(HDR)
 

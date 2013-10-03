@@ -1,0 +1,97 @@
+#! /bin/bash
+#	rspec-xunit [-OPTIONS] SUITEDIRs
+#	-a ADIR     run all suites directly in ADIR
+#	-d          debug
+#	-h          print help message
+#       -o XMLFILE  output xml to given file
+#       -v          verbose
+#	SUITEDIRs run all tests directly in SUITEDIR
+# run rspec on test cases found under each ACTDIR.
+# exit nonzero if any test case failed.
+
+usage()
+{
+	echo 'usage: rspec-xunit [-OPTIONS] SUITEDIRs'
+	echo '	-a ADIR     run all suites directly in ADIR'
+	echo '	-d          debug'
+	echo '	-h          print help message'
+	echo '	-o XMLFILE  output xml to given file'
+	echo '	-v          verbose'
+	echo '	SUITEDIRs run all tests directly in SUITEDIR'
+}
+
+# print a list of the testcases in the given dir.
+testcases()
+{
+	declare d="$1"
+	(cd "$d" && /bin/ls -1 2>/dev/null *_spec.rb)
+}
+
+run_suite()
+{
+	declare suite="$1"
+	declare tests=$(testcases "$suite")
+	if [ -z "$tests" ]; then
+		$DFLAG && echo 1>&2 "# No _spec.rb files in $suite"
+		return 0
+	fi
+	$VFLAG && echo 1>&2 "===== running rspec in $suite"
+	cd $suite && rspec $RSPEC_OPTIONS $tests
+}
+
+# print the test suites under the given dir
+get_suites()
+{
+	declare d="$1"
+	find "$d"/* -maxdepth 0 -type d 2>/dev/null | sed -e 's,^\./,,'
+}
+
+main()
+{
+	while getopts ':a:dho:v' flag; do
+		case "$flag" in
+		a) SUITE_DIRS+=($(get_suites "$OPTARG"));;
+		d) DFLAG=true;;
+		h) usage; exit 0;;
+		o) OFLAG=true; XMLFILE="$OPTARG";;
+		v) VFLAG=true;;
+		*) echo 1>&2 "$PROGNAME: bad flag -$flag"; exit 1;;
+		esac
+	done
+	shift $((OPTIND-1))
+
+	declare -a SUITE_DIRS
+	# if no arguments pretend "-a ." was given
+	if [ $# == 0 ]; then
+		SUITE_DIRS+=($(get_suites .))
+	fi
+
+	# expand activities (direct child dirs of each argument dir)
+	SUITE_DIRS+=("$@")
+	$DFLAG && echo "# SUITE_DIRS = ${SUITE_DIRS[@]}"
+
+	FAILURES=0
+
+	# try rspec on each suite dir
+	if $OFLAG; then
+		RSPEC_OPTIONS="$RSPEC_OPTIONS -o $XMLFILE"
+	fi
+	for suite in "${SUITE_DIRS[@]}"; do
+		if ! (run_suite "$suite"); then
+			((FAILURES++))
+		fi
+	done
+
+	# exit with failure if any suites failed
+	[ $FAILURES -eq 0 ]
+}
+
+# ----- start of mainline code
+RSPEC_OPTIONS="-r rspec_junit_formatter -f RspecJunitFormatter"
+VFLAG=false
+DFLAG=false
+PROGNAME=${0##*/}
+OFLAG=true
+XMLFILE="$PROGNAME.xml"
+
+main "$@"

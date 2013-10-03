@@ -1,1 +1,0 @@
-../lib/shunit2/bin/gen_test_results.sh

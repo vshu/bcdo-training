@@ -1,0 +1,10 @@
+# tests for lwcount
+
+! lwcount
+<a b c d e f g
+<x y z
+<
+>7
+>3
+>0
+?0
