@@ -4,7 +4,7 @@
 
 default: tests
 
-TOP_TARGETS :=ruby-tests shell-tests python-tests
+TOP_TARGETS :=shell-tests python-tests
 BUILDROOT :=$(shell /bin/pwd -P)
 ACT_BASE ?=$(BUILDROOT)/acts
 ACT_DIRS :=$(shell ls -d $(ACT_BASE)/*)
@@ -23,7 +23,7 @@ tests: clean $(TEST_REP_DIR)
 
 # make -k doesn't exit on first error
 unittests:
-	@$(MAKE) -k ruby-unittests shell-unittests python-unittests
+	@$(MAKE) -k shell-unittests python-unittests
 
 shell-tests:
 	@$(MAKE) shiot-tests shunit2-tests
